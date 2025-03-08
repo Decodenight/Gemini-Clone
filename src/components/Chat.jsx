@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { RiMenu2Fill, RiSendPlaneFill, RiMicFill } from 'react-icons/ri';
+import { RiMenu2Fill, RiSendPlaneFill, RiMicFill, RiErrorWarningLine } from 'react-icons/ri';
 import { addMessage } from '../store/chatSlice';
 import { useGeminiAPI } from '../hooks/useGeminiAPI';
 import ReactMarkdown from 'react-markdown';
@@ -9,6 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 function Chat({ isSidebarOpen, setIsSidebarOpen }) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const dispatch = useDispatch();
   const messages = useSelector((state) => state.chats.currentChat.messages);
   const { generateResponse } = useGeminiAPI();
@@ -18,6 +19,9 @@ function Chat({ isSidebarOpen, setIsSidebarOpen }) {
     e.preventDefault();
     if (!input.trim()) return;
 
+    // Clear any previous errors
+    setError(null);
+    
     const userMessage = { role: "user", content: input };
     dispatch(addMessage(userMessage));
     setInput("");
@@ -29,10 +33,30 @@ function Chat({ isSidebarOpen, setIsSidebarOpen }) {
       dispatch(addMessage(aiMessage));
     } catch (error) {
       console.error("Error generating response:", error);
+      
+      // Store the error for UI display
+      setError(error);
+      
+      // Add a more specific error message based on the error type
+      let errorMessage = "Sorry, I encountered an error. Please try again.";
+      
+      if (error.type === 'API_KEY_MISSING') {
+        errorMessage = "API key is missing. Please check your environment configuration.";
+      } else if (error.type === 'INVALID_API_KEY') {
+        errorMessage = "Invalid API key. Please check your API key configuration.";
+      } else if (error.type === 'NETWORK_ERROR') {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (error.type === 'QUOTA_EXCEEDED') {
+        errorMessage = "API quota exceeded. Please try again later.";
+      } else if (error.type === 'MODEL_NOT_FOUND') {
+        errorMessage = "The AI model could not be found. This may be due to API changes or an incorrect model name.";
+      }
+      
       dispatch(
         addMessage({
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: errorMessage,
+          isError: true
         })
       );
     }
@@ -51,6 +75,7 @@ function Chat({ isSidebarOpen, setIsSidebarOpen }) {
         <button
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
           className="p-2 hover:bg-white/10 rounded-full"
+          aria-label="Toggle sidebar"
         >
           <RiMenu2Fill size={24} />
         </button>
@@ -78,9 +103,15 @@ function Chat({ isSidebarOpen, setIsSidebarOpen }) {
                 className={`max-w-[90%] md:max-w-[80%] rounded-lg p-3 md:p-4 ${
                   message.role === "user"
                     ? "bg-gemini-blue text-white"
-                    : `${inputBgColor} ${textColor}`
+                    : `${inputBgColor} ${textColor} ${message.isError ? "border border-red-500" : ""}`
                 }`}
               >
+                {message.isError && (
+                  <div className="flex items-center gap-2 text-red-500 mb-2">
+                    <RiErrorWarningLine />
+                    <span className="font-medium">Error</span>
+                  </div>
+                )}
                 <ReactMarkdown className="prose prose-invert max-w-none text-sm md:text-base">
                   {message.content}
                 </ReactMarkdown>
@@ -113,6 +144,7 @@ function Chat({ isSidebarOpen, setIsSidebarOpen }) {
           <button
             type="button"
             className="p-2 hover:bg-white/10 rounded-full transition-colors"
+            aria-label="Voice input"
           >
             <RiMicFill size={20} />
           </button>
@@ -134,10 +166,25 @@ function Chat({ isSidebarOpen, setIsSidebarOpen }) {
             type="submit"
             disabled={!input.trim() || isLoading}
             className="p-2 hover:bg-white/10 rounded-full disabled:opacity-50 transition-colors"
+            aria-label="Send message"
           >
             <RiSendPlaneFill size={20} />
           </button>
         </div>
+        
+        {error && (
+          <div className="mt-2 text-xs text-red-500">
+            {error.type === 'API_KEY_MISSING' && (
+              <p>Please add your API key to the .env file as VITE_GEMINI_API_KEY</p>
+            )}
+            {error.type === 'INVALID_API_KEY' && (
+              <p>Your API key appears to be invalid. Please check it in the .env file.</p>
+            )}
+            {error.type === 'MODEL_NOT_FOUND' && (
+              <p>The model name may have changed. Check the useGeminiAPI.js file for the latest model name.</p>
+            )}
+          </div>
+        )}
       </form>
     </div>
   );
