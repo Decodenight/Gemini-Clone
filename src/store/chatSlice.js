@@ -19,14 +19,23 @@ const chatSlice = createSlice({
       if (state.currentChat.messages.length > 0) {
         // Find the first user message to use as the title
         const firstUserMessage = state.currentChat.messages.find(msg => msg.role === 'user');
-        const title = firstUserMessage 
-          ? firstUserMessage.content.slice(0, 30) + (firstUserMessage.content.length > 30 ? '...' : '')
-          : 'New Chat';
+        
+        // Check if there are any non-error messages from the assistant
+        const hasValidResponse = state.currentChat.messages.some(
+          msg => msg.role === 'assistant' && !msg.isError
+        );
+        
+        // Only save conversations with valid responses
+        if (hasValidResponse) {
+          const title = firstUserMessage 
+            ? firstUserMessage.content.slice(0, 30) + (firstUserMessage.content.length > 30 ? '...' : '')
+            : 'New Chat';
 
-        state.conversations.unshift({
-          title,
-          messages: [...state.currentChat.messages],
-        });
+          state.conversations.unshift({
+            title,
+            messages: [...state.currentChat.messages],
+          });
+        }
       }
       // Clear current chat
       state.currentChat.messages = [];
